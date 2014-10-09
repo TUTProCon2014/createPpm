@@ -50,7 +50,7 @@ bool writePpmImage(const string outputfile, const Mat& out_mat){
 
 	//ファイルオープン（バイナリ書き込みモード）
 	FILE *fp;
-	fopen_s(&fp, (char*)&outputfile, "ab");
+	fopen_s(&fp, outputfile.c_str(), "ab");
 
 	RGB_DATA rgb;
 	rgb.r = rgb.g = rgb.b = 0;
