@@ -1,4 +1,4 @@
-#include <iostream>
+ï»¿#include <iostream>
 #include <algorithm>
 #include <fstream>
 #include <string>
@@ -38,13 +38,13 @@ bool writePpmHeader(const string& outputfile, const Mat& out_mat, const int div_
 
 
 bool writePpmImage(const string outputfile, const Mat& out_mat){
-	//ƒtƒ@ƒCƒ‹ƒI[ƒvƒ“iƒoƒCƒiƒŠ‘‚«‚İƒ‚[ƒhj
+	//ãƒ•ã‚¡ã‚¤ãƒ«ã‚ªãƒ¼ãƒ—ãƒ³ï¼ˆãƒã‚¤ãƒŠãƒªæ›¸ãè¾¼ã¿ãƒ¢ãƒ¼ãƒ‰ï¼‰
 	ofstream ofs(outputfile, std::ios::binary | std::ios::app);
 
 	std::vector<uchar> buf;
 	imencode(".ppm", out_mat, buf);
 
-	// P6\n‚ğ–³‹
+	// P6\nã‚’ç„¡è¦–
 	ofs.write(reinterpret_cast<char *>(&(buf[3])), buf.size() * sizeof(uchar));
 
 	return true;
@@ -52,32 +52,32 @@ bool writePpmImage(const string outputfile, const Mat& out_mat){
 
 
 void SavePpm(const string& filename, const Mat& output, const int div_x, const int div_y){
-	writePpmHeader(filename, output, div_x, div_y); //ƒwƒbƒ_•ÒW
-	writePpmImage(filename, output); //Mat‚ğƒoƒCƒiƒŠ‚Å‘‚«‚İ
+	writePpmHeader(filename, output, div_x, div_y); //ãƒ˜ãƒƒãƒ€ç·¨é›†
+	writePpmImage(filename, output); //Matã‚’ãƒã‚¤ãƒŠãƒªã§æ›¸ãè¾¼ã¿
 }
 
 
 int main(int argc, char* argv[]){
 	const string windowName = "createPpm";
 
-	/*‰æ‘œ‚²‚Æ‚Éƒpƒ‰ƒ[ƒ^[‚ğ•ÏX(‰º‚Ss)*/
+	/*ç”»åƒã”ã¨ã«ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ãƒ¼ã‚’å¤‰æ›´(ä¸‹ï¼”è¡Œ)*/
 
 	std::cout << "image file ----- ";
 	const auto readfile = readFrom<std::string>(std::cin);
 	std::cout << "output file ----- ";
-	const auto outputfile = readFrom<std::string>(std::cin); //‘‚«‚İ‰æ‘œ(Œˆ‚ß‘Å‚¿)
+	const auto outputfile = readFrom<std::string>(std::cin); //æ›¸ãè¾¼ã¿ç”»åƒ(æ±ºã‚æ‰“ã¡)
 	std::cout << "div_x ---- ";
-	const auto div_x = readFrom<size_t>(std::cin); //devideRand(); ‰¡•ªŠ„”(Œˆ‚ß‘Å‚¿)
+	const auto div_x = readFrom<size_t>(std::cin); //devideRand(); æ¨ªåˆ†å‰²æ•°(æ±ºã‚æ‰“ã¡)
 	std::cout << "div_y ---- ";
-	const auto div_y = readFrom<size_t>(std::cin); //devideRand(); c•ªŠ„”(Œˆ‚ß‘Å‚¿)
+	const auto div_y = readFrom<size_t>(std::cin); //devideRand(); ç¸¦åˆ†å‰²æ•°(æ±ºã‚æ‰“ã¡)
 
 	cv::namedWindow(windowName, cv::WINDOW_AUTOSIZE);
 
 	auto divImg = [&](){
-		// (1)‰æ‘œ‚ğ“Ç‚İ‚Ş
+		// (1)ç”»åƒã‚’èª­ã¿è¾¼ã‚€
 		auto s_img = imread(readfile);
 
-		// (2)‰æ‘œ‚ğ•ªŠ„‚·‚é‚½‚ß‚Ì‹éŒ`‚ğİ’è
+		// (2)ç”»åƒã‚’åˆ†å‰²ã™ã‚‹ãŸã‚ã®çŸ©å½¢ã‚’è¨­å®š
 		utils::Image img(s_img(Rect(0, 0, s_img.cols / div_x * div_x,
 								 s_img.rows / div_y * div_y)));
 		return utils::makeDividedImage(std::move(img), div_x, div_y);
@@ -88,7 +88,7 @@ int main(int argc, char* argv[]){
 	std::uniform_int_distribution<size_t> distX(0, div_x-1),
 	                                      distY(0, div_y-1);
 
-	// (3)•”•ª‰æ‘œ‚ğ“ü‚êŠ·‚¦‚é
+	// (3)éƒ¨åˆ†ç”»åƒã‚’å…¥ã‚Œæ›ãˆã‚‹
 	std::vector<std::vector<utils::ImageID>> idxs;
 	idxs.reserve(div_y);
 
@@ -117,12 +117,12 @@ int main(int argc, char* argv[]){
 	}
 
 	auto rndMat = swpImg.cvMat();
-	// (4)‰æ‘œ‚Ì•\¦
+	// (4)ç”»åƒã®è¡¨ç¤º
 	imshow(windowName, rndMat);
 
-	SavePpm(outputfile, rndMat, div_x, div_y); //–â‘èŒ`®‚Åppm•Û‘¶
+	SavePpm(outputfile, rndMat, div_x, div_y); //å•é¡Œå½¢å¼ã§ppmä¿å­˜
 
-	waitKey(0); // ƒL[“ü—Í‘Ò‚¿
+	waitKey(0); // ã‚­ãƒ¼å…¥åŠ›å¾…ã¡
 
 	return 0;
 }
