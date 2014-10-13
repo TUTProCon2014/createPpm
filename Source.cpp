@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 #include <fstream>
 #include <string>
 #include <cstdio>
@@ -7,31 +8,23 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/opencv.hpp>
+#include "../utils/include/image.hpp"
+#include "../utils/include/types.hpp"
+
 
 using namespace cv;
 using namespace std;
+using namespace procon;
 
-typedef struct _RGB_DATA
+
+template <typename T, typename S>
+T readFrom(S& stream)
 {
-	uchar r;    //R
-	uchar g;    //G
-	uchar b;    //B
-}RGB_DATA;
-
-/*2～16までの乱数作成(分割数)。分割数決め打ちのため現在未使用*/
-int devideRand(){
-	return rand() % 15 + 2;
+	T t;
+	stream >> t;
+	return t;
 }
 
-RGB_DATA getRGB(IplImage *img, unsigned int x, unsigned int y)
-{
-	RGB_DATA data;
-	data.r = data.g = data.b = 0;
-	data.b = ((uchar*)(img->imageData + img->widthStep*y))[x * 3];
-	data.g = ((uchar*)(img->imageData + img->widthStep*y))[x * 3 + 1];
-	data.r = ((uchar*)(img->imageData + img->widthStep*y))[x * 3 + 2];
-	return data;
-}
 
 bool writePpmHeader(const string& outputfile, const Mat& out_mat, const int div_x, const int div_y)
 {
@@ -40,121 +33,96 @@ bool writePpmHeader(const string& outputfile, const Mat& out_mat, const int div_
 	ofs << "# " << div_x << " " << div_y << endl;
 	ofs << "# 10" << endl;
 	ofs << "# 120 10" << endl;
-	ofs << out_mat.cols << " " << out_mat.rows << endl;
-	ofs << "255" << endl;
 	return true;
 }
+
 
 bool writePpmImage(const string outputfile, const Mat& out_mat){
-	IplImage src_img = out_mat;
-
 	//ファイルオープン（バイナリ書き込みモード）
-	FILE *fp;
-	fopen_s(&fp, outputfile.c_str(), "ab");
+	ofstream ofs(outputfile, std::ios::binary | std::ios::app);
 
-	RGB_DATA rgb;
-	rgb.r = rgb.g = rgb.b = 0;
+	std::vector<uchar> buf;
+	imencode(".ppm", out_mat, buf);
 
-	//ファイルオープンに成功したらデータを書き込む
-	if (fp != NULL) {
-		for (int y = 0; y < src_img.height; y++)
-		{
-			for (int x = 0; x < src_img.width; x++)
-			{
-				//RGB値取得
-				rgb = getRGB(&src_img, x, y);
+	// P6\nを無視
+	ofs.write(reinterpret_cast<char *>(&(buf[3])), buf.size() * sizeof(uchar));
 
-				//バイナリデータ書き込み
-				fwrite(&rgb.r, sizeof(uchar), 1, fp);
-				fwrite(&rgb.g, sizeof(uchar), 1, fp);
-				fwrite(&rgb.b, sizeof(uchar), 1, fp);
-			}
-		}
-
-		//ファイルクローズ
-		fclose(fp);
-	}
 	return true;
 }
+
 
 void SavePpm(const string& filename, const Mat& output, const int div_x, const int div_y){
 	writePpmHeader(filename, output, div_x, div_y); //ヘッダ編集
-	writePpmImage(filename,output); //Matをバイナリで書き込み
+	writePpmImage(filename, output); //Matをバイナリで書き込み
 }
 
 
 int main(int argc, char* argv[]){
+	const string windowName = "createPpm";
+
 	/*画像ごとにパラメーターを変更(下４行)*/
-	const auto readfile = "img.jpg"; //読み込み画像(決め打ち)
-	const auto outputfile = "img1.ppm"; //書き込み画像(決め打ち)
-	const int div_x = 3; //devideRand(); 横分割数(決め打ち)
-	const int div_y = 3; //devideRand(); 縦分割数(決め打ち)
-	/**/
 
-	srand((unsigned int)time(NULL));
-	int w, h, i, j;
-	IplImage *src_img, *dst_img, *tmp_img[2];
-	const int div_xy = div_x*div_y;
-	CvRect roi[div_xy];
-	CvRNG rng = cvRNG(time(NULL));
+	std::cout << "image file ----- ";
+	const auto readfile = readFrom<std::string>(std::cin);
+	std::cout << "output file ----- ";
+	const auto outputfile = readFrom<std::string>(std::cin); //書き込み画像(決め打ち)
+	std::cout << "div_x ---- ";
+	const auto div_x = readFrom<size_t>(std::cin); //devideRand(); 横分割数(決め打ち)
+	std::cout << "div_y ---- ";
+	const auto div_y = readFrom<size_t>(std::cin); //devideRand(); 縦分割数(決め打ち)
 
-	// (1)画像を読み込む
-	src_img = cvLoadImage(readfile, CV_LOAD_IMAGE_ANYDEPTH | CV_LOAD_IMAGE_ANYCOLOR);
+	cv::namedWindow(windowName, cv::WINDOW_AUTOSIZE);
 
-	w = src_img->width - src_img->width % div_x + div_x;
-	h = src_img->height - src_img->height % div_y + div_y;
-	dst_img = cvCreateImage(cvSize(w, h), src_img->depth, src_img->nChannels);
-	tmp_img[0] = cvCreateImage(cvSize(w / div_x, h / div_y), src_img->depth, src_img->nChannels);
-	tmp_img[1] = cvCreateImage(cvSize(w / div_x, h / div_y), src_img->depth, src_img->nChannels);
-	
-	Mat s_img = cvarrToMat(src_img);
-	Mat d_img = cvarrToMat(dst_img);
+	auto divImg = [&](){
+		// (1)画像を読み込む
+		auto s_img = imread(readfile);
 
-	imshow(readfile,s_img); //読み込み確認
+		// (2)画像を分割するための矩形を設定
+		utils::Image img(s_img(Rect(0, 0, s_img.cols / div_x * div_x,
+								 s_img.rows / div_y * div_y)));
+		return utils::makeDividedImage(std::move(img), div_x, div_y);
+	}();
 
-	resize(s_img, d_img, d_img.size());
-	IplImage ds_img = d_img;
+	std::random_device seed_gen;
+	std::mt19937 engine(seed_gen());
+	std::uniform_int_distribution<size_t> distX(0, div_x-1),
+	                                      distY(0, div_y-1);
 
-	// (2)画像を分割するための矩形を設定
-	for (i = 0; i < div_x; i++) {
-		for (j = 0; j < div_y; j++) {
-			roi[div_x * j + i].x = w / div_x * i;
-			roi[div_x * j + i].y = h / div_y * j;
-			roi[div_x * j + i].width = w / div_x;
-			roi[div_x * j + i].height = h / div_y;
-		}
+	// (3)部分画像を入れ換える
+	std::vector<std::vector<utils::ImageID>> idxs;
+	idxs.reserve(div_y);
+
+	for(size_t i = 0; i < div_y; ++i){
+		idxs.emplace_back();
+
+		auto& last = idxs[idxs.size()-1];
+		last.reserve(div_x);
+		for(size_t j = 0; j < div_x; ++j)
+			last.emplace_back(i, j);
 	}
 
-	// (3)ROIを利用して部分画像を入れ換える
-	for (i = 0; i < div_xy * 2; i++) {
-		int p1 = cvRandInt(&rng) % div_xy;
-		int p2 = cvRandInt(&rng) % div_xy;
-		cvSetImageROI(&ds_img, roi[p1]);
-		cvCopy(&ds_img, tmp_img[0]);
-		cvSetImageROI(&ds_img, roi[p2]);
-		cvCopy(&ds_img, tmp_img[1]);
-		cvCopy(tmp_img[0], &ds_img);
-		cvSetImageROI(&ds_img, roi[p1]);
-		cvCopy(tmp_img[1], &ds_img);
+	std::shuffle(idxs.begin(), idxs.end(), engine);
+	for(auto& e: idxs)
+		std::shuffle(e.begin(), e.end(), engine);
+
+	auto swpImg = utils::SwappedImage(divImg, idxs);
+
+	for (size_t i = 0; i < div_x * div_y * 2; i++){
+		size_t p1x = distX(engine),
+		       p2x = distX(engine),
+		       p1y = distY(engine),
+		       p2y = distY(engine);
+
+		swpImg.swap_element(utils::makeIndex2D(p1y, p1x), utils::makeIndex2D(p2y, p2x));
 	}
-	cvResetImageROI(&ds_img);
 
-	Mat reDst_img = cvarrToMat(&ds_img);
-
-	resize(reDst_img, s_img, s_img.size());
-
+	auto rndMat = swpImg.cvMat();
 	// (4)画像の表示
-	//imshow("分割確認", s_img);
+	imshow(windowName, rndMat);
 
-	SavePpm(outputfile, s_img, div_x, div_y); //問題形式でppm保存
+	SavePpm(outputfile, rndMat, div_x, div_y); //問題形式でppm保存
 
-	IplImage *check_img = cvLoadImage(outputfile, CV_LOAD_IMAGE_ANYDEPTH | CV_LOAD_IMAGE_ANYCOLOR);
-	cvShowImage(outputfile, check_img); //ppmファイル確認
+	waitKey(0); // キー入力待ち
 
-	cvWaitKey(0); // キー入力待ち
-
-	cvReleaseImage(&src_img);
-	cvReleaseImage(&dst_img);
-	cvReleaseImage(&check_img);
 	return 0;
 }
