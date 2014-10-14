@@ -1,4 +1,5 @@
-#include <iostream>
+ï»¿#include <iostream>
+#include <algorithm>
 #include <fstream>
 #include <string>
 #include <cstdio>
@@ -7,31 +8,23 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/opencv.hpp>
+#include "../utils/include/image.hpp"
+#include "../utils/include/types.hpp"
+
 
 using namespace cv;
 using namespace std;
+using namespace procon;
 
-typedef struct _RGB_DATA
+
+template <typename T, typename S>
+T readFrom(S& stream)
 {
-	uchar r;    //R
-	uchar g;    //G
-	uchar b;    //B
-}RGB_DATA;
-
-/*2`16‚Ü‚Å‚Ì—”ì¬(•ªŠ„”)B•ªŠ„”Œˆ‚ß‘Å‚¿‚Ì‚½‚ßŒ»İ–¢g—p*/
-int devideRand(){
-	return rand() % 15 + 2;
+	T t;
+	stream >> t;
+	return t;
 }
 
-RGB_DATA getRGB(IplImage *img, unsigned int x, unsigned int y)
-{
-	RGB_DATA data;
-	data.r = data.g = data.b = 0;
-	data.b = ((uchar*)(img->imageData + img->widthStep*y))[x * 3];
-	data.g = ((uchar*)(img->imageData + img->widthStep*y))[x * 3 + 1];
-	data.r = ((uchar*)(img->imageData + img->widthStep*y))[x * 3 + 2];
-	return data;
-}
 
 bool writePpmHeader(const string& outputfile, const Mat& out_mat, const int div_x, const int div_y)
 {
@@ -40,121 +33,96 @@ bool writePpmHeader(const string& outputfile, const Mat& out_mat, const int div_
 	ofs << "# " << div_x << " " << div_y << endl;
 	ofs << "# 10" << endl;
 	ofs << "# 120 10" << endl;
-	ofs << out_mat.cols << " " << out_mat.rows << endl;
-	ofs << "255" << endl;
 	return true;
 }
+
 
 bool writePpmImage(const string outputfile, const Mat& out_mat){
-	IplImage src_img = out_mat;
+	//ãƒ•ã‚¡ã‚¤ãƒ«ã‚ªãƒ¼ãƒ—ãƒ³ï¼ˆãƒã‚¤ãƒŠãƒªæ›¸ãè¾¼ã¿ãƒ¢ãƒ¼ãƒ‰ï¼‰
+	ofstream ofs(outputfile, std::ios::binary | std::ios::app);
 
-	//ƒtƒ@ƒCƒ‹ƒI[ƒvƒ“iƒoƒCƒiƒŠ‘‚«‚İƒ‚[ƒhj
-	FILE *fp;
-	fopen_s(&fp, (char*)&outputfile, "ab");
+	std::vector<uchar> buf;
+	imencode(".ppm", out_mat, buf);
 
-	RGB_DATA rgb;
-	rgb.r = rgb.g = rgb.b = 0;
+	// P6\nã‚’ç„¡è¦–
+	ofs.write(reinterpret_cast<char *>(&(buf[3])), buf.size() * sizeof(uchar));
 
-	//ƒtƒ@ƒCƒ‹ƒI[ƒvƒ“‚É¬Œ÷‚µ‚½‚çƒf[ƒ^‚ğ‘‚«‚Ş
-	if (fp != NULL) {
-		for (int y = 0; y < src_img.height; y++)
-		{
-			for (int x = 0; x < src_img.width; x++)
-			{
-				//RGB’læ“¾
-				rgb = getRGB(&src_img, x, y);
-
-				//ƒoƒCƒiƒŠƒf[ƒ^‘‚«‚İ
-				fwrite(&rgb.r, sizeof(uchar), 1, fp);
-				fwrite(&rgb.g, sizeof(uchar), 1, fp);
-				fwrite(&rgb.b, sizeof(uchar), 1, fp);
-			}
-		}
-
-		//ƒtƒ@ƒCƒ‹ƒNƒ[ƒY
-		fclose(fp);
-	}
 	return true;
 }
 
+
 void SavePpm(const string& filename, const Mat& output, const int div_x, const int div_y){
-	writePpmHeader(filename, output, div_x, div_y); //ƒwƒbƒ_•ÒW
-	writePpmImage(filename,output); //Mat‚ğƒoƒCƒiƒŠ‚Å‘‚«‚İ
+	writePpmHeader(filename, output, div_x, div_y); //ãƒ˜ãƒƒãƒ€ç·¨é›†
+	writePpmImage(filename, output); //Matã‚’ãƒã‚¤ãƒŠãƒªã§æ›¸ãè¾¼ã¿
 }
 
 
 int main(int argc, char* argv[]){
-	/*‰æ‘œ‚²‚Æ‚Éƒpƒ‰ƒ[ƒ^[‚ğ•ÏX(‰º‚Ss)*/
-	const auto readfile = "img.jpg"; //“Ç‚İ‚İ‰æ‘œ(Œˆ‚ß‘Å‚¿)
-	const auto outputfile = "img1.ppm"; //‘‚«‚İ‰æ‘œ(Œˆ‚ß‘Å‚¿)
-	const int div_x = 3; //devideRand(); ‰¡•ªŠ„”(Œˆ‚ß‘Å‚¿)
-	const int div_y = 3; //devideRand(); c•ªŠ„”(Œˆ‚ß‘Å‚¿)
-	/**/
+	const string windowName = "createPpm";
 
-	srand((unsigned int)time(NULL));
-	int w, h, i, j;
-	IplImage *src_img, *dst_img, *tmp_img[2];
-	const int div_xy = div_x*div_y;
-	CvRect roi[div_xy];
-	CvRNG rng = cvRNG(time(NULL));
+	/*ç”»åƒã”ã¨ã«ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ãƒ¼ã‚’å¤‰æ›´(ä¸‹ï¼”è¡Œ)*/
 
-	// (1)‰æ‘œ‚ğ“Ç‚İ‚Ş
-	src_img = cvLoadImage(readfile, CV_LOAD_IMAGE_ANYDEPTH | CV_LOAD_IMAGE_ANYCOLOR);
+	std::cout << "image file ----- ";
+	const auto readfile = readFrom<std::string>(std::cin);
+	std::cout << "output file ----- ";
+	const auto outputfile = readFrom<std::string>(std::cin); //æ›¸ãè¾¼ã¿ç”»åƒ(æ±ºã‚æ‰“ã¡)
+	std::cout << "div_x ---- ";
+	const auto div_x = readFrom<size_t>(std::cin); //devideRand(); æ¨ªåˆ†å‰²æ•°(æ±ºã‚æ‰“ã¡)
+	std::cout << "div_y ---- ";
+	const auto div_y = readFrom<size_t>(std::cin); //devideRand(); ç¸¦åˆ†å‰²æ•°(æ±ºã‚æ‰“ã¡)
 
-	w = src_img->width - src_img->width % div_x + div_x;
-	h = src_img->height - src_img->height % div_y + div_y;
-	dst_img = cvCreateImage(cvSize(w, h), src_img->depth, src_img->nChannels);
-	tmp_img[0] = cvCreateImage(cvSize(w / div_x, h / div_y), src_img->depth, src_img->nChannels);
-	tmp_img[1] = cvCreateImage(cvSize(w / div_x, h / div_y), src_img->depth, src_img->nChannels);
-	
-	Mat s_img = cvarrToMat(src_img);
-	Mat d_img = cvarrToMat(dst_img);
+	cv::namedWindow(windowName, cv::WINDOW_AUTOSIZE);
 
-	imshow(readfile,s_img); //“Ç‚İ‚İŠm”F
+	auto divImg = [&](){
+		// (1)ç”»åƒã‚’èª­ã¿è¾¼ã‚€
+		auto s_img = imread(readfile);
 
-	resize(s_img, d_img, d_img.size());
-	IplImage ds_img = d_img;
+		// (2)ç”»åƒã‚’åˆ†å‰²ã™ã‚‹ãŸã‚ã®çŸ©å½¢ã‚’è¨­å®š
+		utils::Image img(s_img(Rect(0, 0, s_img.cols / div_x * div_x,
+								 s_img.rows / div_y * div_y)));
+		return utils::makeDividedImage(std::move(img), div_x, div_y);
+	}();
 
-	// (2)‰æ‘œ‚ğ•ªŠ„‚·‚é‚½‚ß‚Ì‹éŒ`‚ğİ’è
-	for (i = 0; i < div_x; i++) {
-		for (j = 0; j < div_y; j++) {
-			roi[div_x * j + i].x = w / div_x * i;
-			roi[div_x * j + i].y = h / div_y * j;
-			roi[div_x * j + i].width = w / div_x;
-			roi[div_x * j + i].height = h / div_y;
-		}
+	std::random_device seed_gen;
+	std::mt19937 engine(seed_gen());
+	std::uniform_int_distribution<size_t> distX(0, div_x-1),
+	                                      distY(0, div_y-1);
+
+	// (3)éƒ¨åˆ†ç”»åƒã‚’å…¥ã‚Œæ›ãˆã‚‹
+	std::vector<std::vector<utils::ImageID>> idxs;
+	idxs.reserve(div_y);
+
+	for(size_t i = 0; i < div_y; ++i){
+		idxs.emplace_back();
+
+		auto& last = idxs[idxs.size()-1];
+		last.reserve(div_x);
+		for(size_t j = 0; j < div_x; ++j)
+			last.emplace_back(i, j);
 	}
 
-	// (3)ROI‚ğ—˜—p‚µ‚Ä•”•ª‰æ‘œ‚ğ“ü‚êŠ·‚¦‚é
-	for (i = 0; i < div_xy * 2; i++) {
-		int p1 = cvRandInt(&rng) % div_xy;
-		int p2 = cvRandInt(&rng) % div_xy;
-		cvSetImageROI(&ds_img, roi[p1]);
-		cvCopy(&ds_img, tmp_img[0]);
-		cvSetImageROI(&ds_img, roi[p2]);
-		cvCopy(&ds_img, tmp_img[1]);
-		cvCopy(tmp_img[0], &ds_img);
-		cvSetImageROI(&ds_img, roi[p1]);
-		cvCopy(tmp_img[1], &ds_img);
+	std::shuffle(idxs.begin(), idxs.end(), engine);
+	for(auto& e: idxs)
+		std::shuffle(e.begin(), e.end(), engine);
+
+	auto swpImg = utils::SwappedImage(divImg, idxs);
+
+	for (size_t i = 0; i < div_x * div_y * 2; i++){
+		size_t p1x = distX(engine),
+		       p2x = distX(engine),
+		       p1y = distY(engine),
+		       p2y = distY(engine);
+
+		swpImg.swap_element(utils::makeIndex2D(p1y, p1x), utils::makeIndex2D(p2y, p2x));
 	}
-	cvResetImageROI(&ds_img);
 
-	Mat reDst_img = cvarrToMat(&ds_img);
+	auto rndMat = swpImg.cvMat();
+	// (4)ç”»åƒã®è¡¨ç¤º
+	imshow(windowName, rndMat);
 
-	resize(reDst_img, s_img, s_img.size());
+	SavePpm(outputfile, rndMat, div_x, div_y); //å•é¡Œå½¢å¼ã§ppmä¿å­˜
 
-	// (4)‰æ‘œ‚Ì•\¦
-	//imshow("•ªŠ„Šm”F", s_img);
+	waitKey(0); // ã‚­ãƒ¼å…¥åŠ›å¾…ã¡
 
-	SavePpm(outputfile, s_img, div_x, div_y); //–â‘èŒ`®‚Åppm•Û‘¶
-
-	IplImage *check_img = cvLoadImage(outputfile, CV_LOAD_IMAGE_ANYDEPTH | CV_LOAD_IMAGE_ANYCOLOR);
-	cvShowImage(outputfile, check_img); //ppmƒtƒ@ƒCƒ‹Šm”F
-
-	cvWaitKey(0); // ƒL[“ü—Í‘Ò‚¿
-
-	cvReleaseImage(&src_img);
-	cvReleaseImage(&dst_img);
-	cvReleaseImage(&check_img);
 	return 0;
 }
